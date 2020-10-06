@@ -3,4 +3,4 @@
 
 * Plotting of stock trend around the earning dates 
 
-![Image](images/msft.PNG) 
+![Image](images/msft.png) 
