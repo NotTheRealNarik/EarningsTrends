@@ -5,6 +5,7 @@ from datetime import date , timedelta
 from datetime import datetime
 import itertools
 import random
+import math
 
 #UI
 import tkinter as tk
@@ -19,60 +20,71 @@ from matplotlib.ticker import NullFormatter
 from matplotlib.pyplot import figure
 import matplotlib.dates as mdates
 from matplotlib.lines import Line2D
-
 #options
 #pd.options.display.max_rows = 999
 
 
-def getPriceData(inp1):
+def getPriceData(inp1,numEarnings):
     #inp = 'TSLA'
-    #inp = entry1.get()
     inp = inp1.upper()
     print(inp)
+    print('Fetching data for the past {} earning dates'.format(numEarnings))
+    
     endDate = date.today()
     endYear = endDate.year
     day = endDate.day
     month = endDate.month
-    startDate = date(endYear-2,month,day)
+    numYears = numEarnings/4
+    numYears = math.ceil(numYears) 
+    startDate = date(endYear-numYears,month,day)
+    #get ticker info
     tick = yf.Ticker(inp)
-    #name = tick.info['shortName']
+    name = tick.info['shortName']
+    #get price data of the ticker
     data = tick.history(period='max',start=startDate, end=endDate)
-    data = data.reset_index()
-    #yahoo earnings
-    yec = YahooEarningsCalendar()
-    earningsRaw = yec.get_earnings_of(inp)
-    earningsDF= pd.DataFrame([datetime.strptime(d['startdatetime'][:10],'%Y-%m-%d') for d in earningsRaw]).rename(columns = {0:"dates"})
-    startTimeStamp = pd.Timestamp(startDate)
-    endTimeStamp = pd.Timestamp(endDate)
-    earningDates = earningsDF.loc[(earningsDF['dates']>=startTimeStamp) & (earningsDF['dates']<=endTimeStamp)]
+    if data.empty:
+        print("Error: Ticker symbol does not exist!")
+    else:
+        data = data.reset_index()
+        #yahoo earnings
+        yec = YahooEarningsCalendar()
+        earningsRaw = yec.get_earnings_of(inp)
+        earningsDF= pd.DataFrame([datetime.strptime(d['startdatetime'][:10],'%Y-%m-%d') for d in earningsRaw]).rename(columns = {0:"dates"})
+        startTimeStamp = pd.Timestamp(startDate)
+        endTimeStamp = pd.Timestamp(endDate)
+        
+        #get alll earnings dates for 'numYears' years
+        earningDates = earningsDF.loc[(earningsDF['dates']>=startTimeStamp) & (earningsDF['dates']<=endTimeStamp)]
+        #get only 'numEarnigns' number of dates
+        earningDates = earningDates[:numEarnings]
+        earningPriceList = []
+        earningDateList = []
+        earningDF = pd.DataFrame()
+        for x in earningDates.itertuples():
+            for d in data.itertuples():
+                if d.Date == x.dates:
+                    data.at[d.Index,'earningDates'] = x.dates
+                    earningPriceList.append(d.Close)
+                    earningDateList.append(x.dates)      
 
-    earningPriceList = []
-    earningDateList = []
-    earningDF = pd.DataFrame()
-    for x in earningDates.itertuples():
-        for d in data.itertuples():
-            if d.Date == x.dates:
-                data.at[d.Index,'earningDates'] = x.dates
-                earningPriceList.append(d.Close)
-                earningDateList.append(x.dates)      
+        earningDF['Dates'] = earningDateList
+        earningDF['Price'] = earningPriceList
+        plottingDF = pd.DataFrame()
+        dfPlot_collection = {}
+        for i in range(len(earningDateList)):
+            idx = data[data['earningDates']==earningDateList[i]].index.values.astype(int)[0]
+            tempDF = data.iloc[idx - 10 : idx + 10]
+            dfPlot_collection[i]=tempDF
+            plottingDF = plottingDF.append(tempDF)
 
-    earningDF['Dates'] = earningDateList
-    earningDF['Price'] = earningPriceList
-    plottingDF = pd.DataFrame()
-    dfPlot_collection = {}
-    for i in range(len(earningDateList)):
-        idx = data[data['earningDates']==earningDateList[i]].index.values.astype(int)[0]
-        tempDF = data.iloc[idx - 10 : idx + 10]
-        dfPlot_collection[i]=tempDF
-        plottingDF = plottingDF.append(tempDF)
-    
-    #plots
-    generateSubGraphs(earningDateList,earningPriceList,dfPlot_collection)
-    #generateGraph(earningDateList,earningPriceList,dfPlot_collection,data,name)
+        #plots
+        generateSubGraphs(earningDateList,earningPriceList,dfPlot_collection,numYears)
+        #generateGraph(earningDateList,earningPriceList,dfPlot_collection,data,name)
 
-def generateSubGraphs(earningDateList,earningPriceList,dfPlot_collection):
+
+def generateSubGraphs(earningDateList,earningPriceList,dfPlot_collection,plottingRows):
     print("generating....")
-    fig, axes = plt.subplots(2,4, figsize=(20,7))
+    fig, axes = plt.subplots(plottingRows,4, figsize=(20,10))
     for i in range(len(earningDateList)):
         ax = axes.flatten()[i]
         #main Plot Prices vs Dates
@@ -92,7 +104,7 @@ def generateSubGraphs(earningDateList,earningPriceList,dfPlot_collection):
                            ]
         ax.set_xlim([min(dfPlot_collection[i]['Date']), max(dfPlot_collection[i]['Date'])])
         ax.set_ylim([min(dfPlot_collection[i]['Close'])-5, max(dfPlot_collection[i]['Close'])+5])
-        ax.legend(handles=legend_elements)
+        ax.legend(handles=legend_elements, fancybox=True, framealpha=0.1)
         plt.setp(ax.get_xticklabels(), rotation=30, horizontalalignment='right')
     fig.tight_layout()
     plt.show()
@@ -128,4 +140,5 @@ def generateGraph(earningDateList,earningPriceList,dfPlot_collection,data,name):
 
 
 inp = input("Enter tick code: ")
-getPriceData(inp)
+numEarnings = int(input("Enter number of earning Dates:"))
+getPriceData(inp,numEarnings)
