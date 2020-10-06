@@ -1,0 +1,5 @@
+.ipynd_checkpoints
+build
+dist
+_pycache_
+earningsGraph.spec
