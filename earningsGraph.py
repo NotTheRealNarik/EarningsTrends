@@ -73,7 +73,10 @@ def getPriceData(inp1,numEarnings):
         dfPlot_collection = {}
         for i in range(len(earningDateList)):
             idx = data[data['earningDates']==earningDateList[i]].index.values.astype(int)[0]
-            tempDF = data.iloc[idx - 10 : idx + 10]
+            if idx<10:
+                tempDF = data.iloc[:idx+10]
+            else:
+                tempDF = data.iloc[idx - 10 : idx + 10]
             dfPlot_collection[i]=tempDF
             plottingDF = plottingDF.append(tempDF)
 
